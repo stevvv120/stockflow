@@ -56,4 +56,48 @@ router.post("/", async (req, res) => {
   }
 });
 
+// PUT /api/products/:id
+router.put("/:id", async (req, res) => {
+  try {
+    const { category_id, sku, name, cost_price, selling_price, minimum_stock } = req.body;
+
+    if (!sku || !name || selling_price == null) {
+      return res.status(400).json({ message: "sku, name, dan selling_price wajib diisi" });
+    }
+
+    const [result]: any = await pool.query(
+      `UPDATE products
+       SET category_id = ?, sku = ?, name = ?, cost_price = ?, selling_price = ?, minimum_stock = ?
+       WHERE id = ?`,
+      [category_id ?? null, sku, name, cost_price ?? 0, selling_price, minimum_stock ?? 5, Number(req.params.id)]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: "Produk tidak ditemukan" });
+    }
+    res.json({ message: "Produk diperbarui" });
+  } catch (err: any) {
+    if (err.code === "ER_DUP_ENTRY") {
+      return res.status(409).json({ message: "SKU sudah dipakai" });
+    }
+    res.status(500).json({ message: String(err) });
+  }
+});
+
+// DELETE /api/products/:id
+router.delete("/:id", async (req, res) => {
+  try {
+    const [result]: any = await pool.query("DELETE FROM products WHERE id = ?", [
+      Number(req.params.id),
+    ]);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: "Produk tidak ditemukan" });
+    }
+    res.json({ message: "Produk dihapus" });
+  } catch (err) {
+    res.status(500).json({ message: String(err) });
+  }
+});
+
 export default router;
