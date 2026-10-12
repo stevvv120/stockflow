@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react";
-import { getProducts, getCategories } from "../src/services/api";
-import type { Product, Category } from "../types";
+import {
+  getProducts, getCategories,
+  createProduct, updateProduct, deleteProduct,
+} from "../services/api";
+import type { ProductInput } from "../services/api";
+import type { Product, Category } from "../../types";
+import ProductForm from "../components/ProductForm";
 
 export default function ProductList() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -9,6 +14,9 @@ export default function ProductList() {
   const [categoryId, setCategoryId] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState<Product | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     getCategories().then(setCategories).catch(() => {});
@@ -21,14 +29,45 @@ export default function ProductList() {
       .then(setProducts)
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [search, categoryId]);
+  }, [search, categoryId, reloadKey]);
 
   const rupiah = (v: string | number) =>
     new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(Number(v));
 
+  const openAdd = () => { setEditing(null); setShowForm(true); };
+  const openEdit = (p: Product) => { setEditing(p); setShowForm(true); };
+  const closeForm = () => { setShowForm(false); setEditing(null); };
+
+  const handleSubmit = async (data: ProductInput) => {
+    if (editing) await updateProduct(editing.id, data);
+    else await createProduct(data);
+    closeForm();
+    setReloadKey((k) => k + 1);
+  };
+
+  const handleDelete = async (p: Product) => {
+    if (!window.confirm(`Hapus produk "${p.name}"?`)) return;
+    try {
+      await deleteProduct(p.id);
+      setReloadKey((k) => k + 1);
+    } catch (e: any) {
+      alert(e.message);
+    }
+  };
+
   return (
     <div style={{ padding: 24, textAlign: "left" }}>
       <h1>Daftar Produk</h1>
+
+      {showForm && (
+        <ProductForm
+          key={editing?.id ?? "new"}
+          categories={categories}
+          product={editing}
+          onSubmit={handleSubmit}
+          onCancel={closeForm}
+        />
+      )}
 
       <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
         <input
@@ -42,6 +81,7 @@ export default function ProductList() {
             <option key={c.id} value={c.id}>{c.name}</option>
           ))}
         </select>
+        <button onClick={openAdd}>+ Tambah Produk</button>
       </div>
 
       {loading && <p>Memuat...</p>}
@@ -52,12 +92,12 @@ export default function ProductList() {
           <thead>
             <tr>
               <th>SKU</th><th>Nama</th><th>Kategori</th>
-              <th>Harga Jual</th><th>Stok</th>
+              <th>Harga Jual</th><th>Stok</th><th>Aksi</th>
             </tr>
           </thead>
           <tbody>
             {products.length === 0 && (
-              <tr><td colSpan={5}>Belum ada produk</td></tr>
+              <tr><td colSpan={6}>Belum ada produk</td></tr>
             )}
             {products.map((p) => (
               <tr key={p.id}>
@@ -67,6 +107,10 @@ export default function ProductList() {
                 <td>{rupiah(p.selling_price)}</td>
                 <td style={{ color: p.stock <= p.minimum_stock ? "red" : "inherit" }}>
                   {p.stock}
+                </td>
+                <td>
+                  <button onClick={() => openEdit(p)}>Edit</button>{" "}
+                  <button onClick={() => handleDelete(p)}>Hapus</button>
                 </td>
               </tr>
             ))}
