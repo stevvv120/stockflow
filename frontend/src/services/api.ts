@@ -191,3 +191,29 @@ export async function downloadSalesCsv(from: string, to: string) {
   a.click();
   URL.revokeObjectURL(url);
 }
+
+export async function createCategory(name: string) {
+  const res = await fetch(`${BASE_URL}/categories`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ name }),
+  });
+  return handle(res);
+}
+
+export async function updateCategory(id: number, name: string) {
+  const res = await fetch(`${BASE_URL}/categories/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ name }),
+  });
+  return handle(res);
+}
+
+export async function deleteCategory(id: number) {
+  const res = await fetch(`${BASE_URL}/categories/${id}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+  return handle(res);
+}

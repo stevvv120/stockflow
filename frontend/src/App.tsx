@@ -5,10 +5,11 @@ import StockPage from "./pages/StockPage";
 import SalesPage from "./pages/SalesPage";
 import SalesHistory from "./pages/SalesHistory";
 import ReportsPage from "./pages/ReportsPage";
+import CategoriesPage from "./pages/CategoriesPage";
 import Login from "./pages/Login";
 import type { User } from "./services/api";
 
-type Page = "dashboard" | "sales" | "history" | "products" | "stock" | "reports";
+type Page = "dashboard" | "sales" | "history" | "products" | "stock" | "reports" | "categories";
 
 function loadUser(): User | null {
   try {
@@ -42,6 +43,7 @@ export default function App() {
           <button onClick={() => setPage("sales")}>Kasir</button>{" "}
           <button onClick={() => setPage("history")}>Riwayat</button>{" "}
           <button onClick={() => setPage("products")}>Produk</button>{" "}
+          {isAdmin && <button onClick={() => setPage("categories")}>Kategori</button>}{" "}
           <button onClick={() => setPage("stock")}>Stok</button>{" "}
           {isAdmin && <button onClick={() => setPage("reports")}>Laporan</button>}
         </span>
@@ -53,6 +55,7 @@ export default function App() {
       {page === "sales" && <SalesPage />}
       {page === "history" && <SalesHistory />}
       {page === "products" && <ProductList user={user} />}
+      {page === "categories" && isAdmin && <CategoriesPage />}
       {page === "stock" && <StockPage user={user} />}
       {page === "reports" && isAdmin && <ReportsPage />}
     </div>
