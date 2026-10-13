@@ -11,9 +11,14 @@ import reportRoutes from "./routes/reports";
 
 dotenv.config();
 const app = express();
-app.use(cors());
-app.use(express.json());
 
+if (!process.env.JWT_SECRET) {
+  throw new Error("JWT_SECRET wajib diisi");
+}
+
+app.use(cors({ origin: process.env.CORS_ORIGIN?.split(",") ?? true }));
+
+app.use(express.json());
 app.use("/api/stock", stockRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/categories", categoryRoutes);

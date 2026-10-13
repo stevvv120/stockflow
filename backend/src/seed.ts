@@ -2,18 +2,17 @@ import bcrypt from "bcryptjs";
 import { pool } from "./config/db";
 
 async function main() {
-  const users = [
-    { name: "Admin", email: "admin@stockflow.test", password: "admin123", role: "admin" },
-    { name: "Staff", email: "staff@stockflow.test", password: "staff123", role: "staff" },
-  ];
-  for (const u of users) {
-    const hash = await bcrypt.hash(u.password, 10);
-    await pool.query(
-      "INSERT IGNORE INTO users (name, email, password_hash, role) VALUES (?, ?, ?, ?)",
-      [u.name, u.email, hash, u.role]
-    );
+  const email = process.env.ADMIN_EMAIL;
+  const password = process.env.ADMIN_PASSWORD;
+  if (!email || !password || password.length < 10) {
+    throw new Error("Isi ADMIN_EMAIL dan ADMIN_PASSWORD (minimal 10 karakter)");
   }
-  console.log("Seed selesai");
+  const hash = await bcrypt.hash(password, 10);
+  await pool.query(
+    "INSERT IGNORE INTO users (name, email, password_hash, role) VALUES ('Admin', ?, ?, 'admin')",
+    [email, hash]
+  );
+  console.log("Admin dibuat");
   await pool.end();
 }
 
