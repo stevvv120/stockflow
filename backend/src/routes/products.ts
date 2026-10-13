@@ -33,26 +33,42 @@ router.get("/", authenticate, async (req, res) => {  try {
 
 // POST /api/products
 router.post("/", authenticate, requireRole("admin"), async (req, res) => {
+  const { category_id, sku, name, cost_price, selling_price, stock, minimum_stock } = req.body;
+
+  if (!sku || !name || selling_price == null) {
+    return res.status(400).json({ message: "sku, name, dan selling_price wajib diisi" });
+  }
+
+  const initialStock = Number(stock ?? 0);
+  const conn = await pool.getConnection();
   try {
-    const { category_id, sku, name, cost_price, selling_price, stock, minimum_stock } = req.body;
+    await conn.beginTransaction();
 
-    if (!sku || !name || selling_price == null) {
-      return res.status(400).json({ message: "sku, name, dan selling_price wajib diisi" });
-    }
-
-    const [result]: any = await pool.query(
+    const [result]: any = await conn.query(
       `INSERT INTO products
         (category_id, sku, name, cost_price, selling_price, stock, minimum_stock)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [category_id ?? null, sku, name, cost_price ?? 0, selling_price, stock ?? 0, minimum_stock ?? 5]
+      [category_id ?? null, sku, name, cost_price ?? 0, selling_price, initialStock, minimum_stock ?? 5]
     );
 
+    if (initialStock > 0) {
+      await conn.query(
+        `INSERT INTO stock_movements (product_id, user_id, movement_type, quantity, note)
+         VALUES (?, ?, 'initial', ?, 'Stok awal')`,
+        [result.insertId, (req as any).user.id, initialStock]
+      );
+    }
+
+    await conn.commit();
     res.status(201).json({ id: result.insertId, message: "Produk ditambahkan" });
   } catch (err: any) {
+    await conn.rollback();
     if (err.code === "ER_DUP_ENTRY") {
       return res.status(409).json({ message: "SKU sudah dipakai" });
     }
     res.status(500).json({ message: String(err) });
+  } finally {
+    conn.release();
   }
 });
 
@@ -95,7 +111,10 @@ router.delete("/:id", authenticate, requireRole("admin"), async (req, res) => {
       return res.status(404).json({ message: "Produk tidak ditemukan" });
     }
     res.json({ message: "Produk dihapus" });
-  } catch (err) {
+    } catch (err: any) {
+    if (err.code === "ER_ROW_IS_REFERENCED_2") {
+      return res.status(409).json({ message: "Produk sudah punya riwayat stok/penjualan dan tidak bisa dihapus" });
+    }
     res.status(500).json({ message: String(err) });
   }
 });

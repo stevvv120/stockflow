@@ -55,6 +55,18 @@ export interface ProductInput {
   minimum_stock: number;
 }
 
+export interface StockMovement {
+  id: number;
+  movement_type: "initial" | "in" | "out" | "adjustment";
+  quantity: number;
+  note: string | null;
+  created_at: string;
+  sku: string;
+  product_name: string;
+  user_name: string | null;
+}
+
+
 async function handle(res: Response) {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.message || "Terjadi kesalahan");
@@ -83,6 +95,27 @@ export async function deleteProduct(id: number) {
   const res = await fetch(`${BASE_URL}/products/${id}`, {
     method: "DELETE",
     headers: authHeaders(),
+  });
+  return handle(res);
+}
+
+export async function getMovements(productId = ""): Promise<StockMovement[]> {
+  const params = new URLSearchParams();
+  if (productId) params.set("product_id", productId);
+  const res = await fetch(`${BASE_URL}/stock/movements?${params}`, { headers: authHeaders() });
+  return handle(res);
+}
+
+export async function addStock(input: {
+  product_id: number;
+  movement_type: "in" | "adjustment";
+  quantity: number;
+  note: string;
+}) {
+  const res = await fetch(`${BASE_URL}/stock`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(input),
   });
   return handle(res);
 }
