@@ -7,6 +7,7 @@ import categoryRoutes from "./routes/categories";
 import authRoutes from "./routes/auth";
 import stockRoutes from "./routes/stock";
 import salesRoutes from "./routes/sales";
+import reportRoutes from "./routes/reports";
 
 dotenv.config();
 const app = express();
@@ -17,6 +18,7 @@ app.use("/api/stock", stockRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/categories", categoryRoutes);
 app.use("/api/auth", authRoutes);
+app.use("/api/reports", reportRoutes);
 app.use("/api/sales", salesRoutes);
 app.get("/api/health", async (_req, res) => {
   try {

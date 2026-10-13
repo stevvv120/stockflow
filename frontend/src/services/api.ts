@@ -78,6 +78,26 @@ export interface SaleDetail extends Sale {
   items: { sku: string; product_name: string; quantity: number; unit_price: string; subtotal: string }[];
 }
 
+export interface DashboardData {
+  total_products: number;
+  low_stock_count: number;
+  today_revenue: number;
+  today_transactions: number;
+  low_stock: { sku: string; name: string; stock: number; minimum_stock: number }[];
+  daily_sales: { date: string; total: number }[];
+}
+
+export interface SalesReport {
+  from: string;
+  to: string;
+  revenue: number;
+  transactions: number;
+  profit: number;
+  items_sold: number;
+  daily: { date: string; total: number }[];
+  top_products: { sku: string; name: string; quantity: number; revenue: number }[];
+}
+
 async function handle(res: Response) {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.message || "Terjadi kesalahan");
@@ -148,4 +168,26 @@ export async function getSales(): Promise<Sale[]> {
 export async function getSale(id: number): Promise<SaleDetail> {
   const res = await fetch(`${BASE_URL}/sales/${id}`, { headers: authHeaders() });
   return handle(res);
+}
+
+export async function getDashboard(): Promise<DashboardData> {
+  const res = await fetch(`${BASE_URL}/reports/dashboard`, { headers: authHeaders() });
+  return handle(res);
+}
+
+export async function getSalesReport(from: string, to: string): Promise<SalesReport> {
+  const res = await fetch(`${BASE_URL}/reports/sales?from=${from}&to=${to}`, { headers: authHeaders() });
+  return handle(res);
+}
+
+export async function downloadSalesCsv(from: string, to: string) {
+  const res = await fetch(`${BASE_URL}/reports/sales/export?from=${from}&to=${to}`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Gagal mengunduh CSV");
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `penjualan_${from}_${to}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
