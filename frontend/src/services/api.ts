@@ -66,6 +66,17 @@ export interface StockMovement {
   user_name: string | null;
 }
 
+export interface Sale {
+  id: number;
+  invoice_number: string;
+  total_amount: string;
+  created_at: string;
+  user_name: string;
+}
+
+export interface SaleDetail extends Sale {
+  items: { sku: string; product_name: string; quantity: number; unit_price: string; subtotal: string }[];
+}
 
 async function handle(res: Response) {
   const data = await res.json().catch(() => ({}));
@@ -117,5 +128,24 @@ export async function addStock(input: {
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify(input),
   });
+  return handle(res);
+}
+
+export async function createSale(items: { product_id: number; quantity: number }[]) {
+  const res = await fetch(`${BASE_URL}/sales`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ items }),
+  });
+  return handle(res) as Promise<{ id: number; invoice_number: string; total_amount: number }>;
+}
+
+export async function getSales(): Promise<Sale[]> {
+  const res = await fetch(`${BASE_URL}/sales`, { headers: authHeaders() });
+  return handle(res);
+}
+
+export async function getSale(id: number): Promise<SaleDetail> {
+  const res = await fetch(`${BASE_URL}/sales/${id}`, { headers: authHeaders() });
   return handle(res);
 }

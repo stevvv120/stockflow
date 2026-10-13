@@ -6,6 +6,7 @@ import productRoutes from "./routes/products";
 import categoryRoutes from "./routes/categories";
 import authRoutes from "./routes/auth";
 import stockRoutes from "./routes/stock";
+import salesRoutes from "./routes/sales";
 
 dotenv.config();
 const app = express();
@@ -16,6 +17,7 @@ app.use("/api/stock", stockRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/categories", categoryRoutes);
 app.use("/api/auth", authRoutes);
+app.use("/api/sales", salesRoutes);
 app.get("/api/health", async (_req, res) => {
   try {
     const [rows] = await pool.query("SELECT 1 AS ok");

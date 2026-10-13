@@ -43,3 +43,25 @@ CREATE TABLE IF NOT EXISTS stock_movements (
     FOREIGN KEY (product_id) REFERENCES products(id),
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
+
+CREATE TABLE IF NOT EXISTS sales (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    invoice_number VARCHAR(40) NOT NULL UNIQUE,
+    user_id INT NOT NULL,
+    total_amount DECIMAL(14,2) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS sale_items (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    sale_id INT NOT NULL,
+    product_id INT NOT NULL,
+    quantity INT NOT NULL,
+    unit_price DECIMAL(12,2) NOT NULL,
+    unit_cost DECIMAL(12,2) NOT NULL DEFAULT 0,
+    subtotal DECIMAL(14,2) NOT NULL,
+    FOREIGN KEY (sale_id) REFERENCES sales(id),
+    FOREIGN KEY (product_id) REFERENCES products(id),
+    CHECK (quantity > 0)
+);
