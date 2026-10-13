@@ -1,11 +1,11 @@
 import { Router } from "express";
 import { pool } from "../config/db";
+import { authenticate, requireRole } from "../middleware/auth";
 
 const router = Router();
 
 // GET /api/products?search=...&category_id=...
-router.get("/", async (req, res) => {
-  try {
+router.get("/", authenticate, async (req, res) => {  try {
     const { search, category_id } = req.query;
     let sql = `
       SELECT p.*, c.name AS category_name
@@ -32,7 +32,7 @@ router.get("/", async (req, res) => {
 });
 
 // POST /api/products
-router.post("/", async (req, res) => {
+router.post("/", authenticate, requireRole("admin"), async (req, res) => {
   try {
     const { category_id, sku, name, cost_price, selling_price, stock, minimum_stock } = req.body;
 
@@ -57,7 +57,7 @@ router.post("/", async (req, res) => {
 });
 
 // PUT /api/products/:id
-router.put("/:id", async (req, res) => {
+router.put("/:id", authenticate, requireRole("admin"), async (req, res) => {
   try {
     const { category_id, sku, name, cost_price, selling_price, minimum_stock } = req.body;
 
@@ -85,7 +85,7 @@ router.put("/:id", async (req, res) => {
 });
 
 // DELETE /api/products/:id
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", authenticate, requireRole("admin"), async (req, res) => {
   try {
     const [result]: any = await pool.query("DELETE FROM products WHERE id = ?", [
       Number(req.params.id),

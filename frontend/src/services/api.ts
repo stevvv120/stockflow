@@ -1,5 +1,32 @@
 import type { Product, Category } from "../../types";
 
+export function getToken() {
+  return localStorage.getItem("token");
+}
+
+function authHeaders(): Record<string, string> {
+  const token = getToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+export interface User {
+  id: number;
+  name: string;
+  email: string;
+  role: "admin" | "staff";
+}
+
+export async function login(email: string, password: string): Promise<{ token: string; user: User }> {
+  const res = await fetch(`${BASE_URL}/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || "Login gagal");
+  return data;
+}
+
 const BASE_URL = "http://localhost:5000/api";
 
 export async function getProducts(search = "", categoryId = ""): Promise<Product[]> {
@@ -7,13 +34,13 @@ export async function getProducts(search = "", categoryId = ""): Promise<Product
   if (search) params.set("search", search);
   if (categoryId) params.set("category_id", categoryId);
 
-  const res = await fetch(`${BASE_URL}/products?${params}`);
+  const res = await fetch(`${BASE_URL}/products?${params}`, { headers: authHeaders() });
   if (!res.ok) throw new Error("Gagal memuat produk");
   return res.json();
 }
 
 export async function getCategories(): Promise<Category[]> {
-  const res = await fetch(`${BASE_URL}/categories`);
+  const res = await fetch(`${BASE_URL}/categories`, { headers: authHeaders() });
   if (!res.ok) throw new Error("Gagal memuat kategori");
   return res.json();
 }
@@ -37,7 +64,7 @@ async function handle(res: Response) {
 export async function createProduct(input: ProductInput) {
   const res = await fetch(`${BASE_URL}/products`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
   return handle(res);
@@ -46,13 +73,16 @@ export async function createProduct(input: ProductInput) {
 export async function updateProduct(id: number, input: ProductInput) {
   const res = await fetch(`${BASE_URL}/products/${id}`, {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
   return handle(res);
 }
 
 export async function deleteProduct(id: number) {
-  const res = await fetch(`${BASE_URL}/products/${id}`, { method: "DELETE" });
+  const res = await fetch(`${BASE_URL}/products/${id}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
   return handle(res);
 }

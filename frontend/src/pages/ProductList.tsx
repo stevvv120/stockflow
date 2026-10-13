@@ -3,11 +3,15 @@ import {
   getProducts, getCategories,
   createProduct, updateProduct, deleteProduct,
 } from "../services/api";
-import type { ProductInput } from "../services/api";
+import type { ProductInput, User } from "../services/api";
 import type { Product, Category } from "../../types";
 import ProductForm from "../components/ProductForm";
 
-export default function ProductList() {
+type ProductListProps = {
+  user: User;
+};
+
+export default function ProductList({ user }: ProductListProps) {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [search, setSearch] = useState("");
@@ -54,6 +58,8 @@ export default function ProductList() {
       alert(e.message);
     }
   };
+
+  console.log("current user:", user);
 
   return (
     <div style={{ padding: 24, textAlign: "left" }}>

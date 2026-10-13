@@ -1,10 +1,11 @@
 import { Router } from "express";
 import { pool } from "../config/db";
+import { authenticate, requireRole } from "../middleware/auth";
 
 const router = Router();
 
 // GET /api/categories
-router.get("/", async (_req, res) => {
+router.get("/", authenticate, async (_req, res) => {
   try {
     const [rows] = await pool.query("SELECT id, name FROM categories ORDER BY name");
     res.json(rows);
@@ -14,7 +15,7 @@ router.get("/", async (_req, res) => {
 });
 
 // POST /api/categories
-router.post("/", async (req, res) => {
+router.post("/", authenticate, requireRole("admin"), async (req, res) => {
   try {
     const { name } = req.body;
     if (!name) return res.status(400).json({ message: "name wajib diisi" });
