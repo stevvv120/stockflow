@@ -14,7 +14,8 @@ Aplikasi web untuk mengelola produk, memantau stok, mencatat penjualan, dan meli
 - **Produk dan kategori**: tambah, edit, hapus, cari, filter
 - **Inventori**: barang masuk, penyesuaian stok, riwayat pergerakan stok
 - **Kasir**: keranjang, total dihitung di server, invoice otomatis
-- **Dashboard dan laporan**: grafik penjualan, stok menipis, produk terlaris, laba kotor, ekspor CSV
+- **Dashboard dan laporan**: grafik penjualan, stok menipis, produk terlaris, laba kotor, rentang laporan cepat, ekspor CSV
+- **Kemudahan operasional**: navigasi responsif, pencarian dan penyortiran produk, filter transaksi dan stok, serta cetak struk penjualan
 
 ## Teknologi
 
@@ -56,7 +57,8 @@ Get-Content .\database\schema.sql | mysql -u root
 # Siapkan backend
 Set-Location .\backend
 Copy-Item .\.env.example .\.env
-# Edit .env dan sesuaikan kredensial MySQL serta JWT_SECRET
+# Edit .env dan sesuaikan kredensial MySQL serta isi JWT_SECRET dengan secret acak minimal 32 karakter
+# Gunakan secret yang sama pada semua instance backend; perubahan secret mengharuskan login ulang.
 npm install
 npx tsx src/seed.ts
 npm run dev

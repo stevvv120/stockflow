@@ -4,6 +4,16 @@ export function getToken() {
   return localStorage.getItem("token");
 }
 
+async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const res = await fetch(input, init);
+  if (res.status === 401) {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    window.dispatchEvent(new Event("stockflow:auth-expired"));
+  }
+  return res;
+}
+
 function authHeaders(): Record<string, string> {
   const token = getToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
@@ -34,13 +44,13 @@ export async function getProducts(search = "", categoryId = ""): Promise<Product
   if (search) params.set("search", search);
   if (categoryId) params.set("category_id", categoryId);
 
-  const res = await fetch(`${BASE_URL}/products?${params}`, { headers: authHeaders() });
+  const res = await apiFetch(`${BASE_URL}/products?${params}`, { headers: authHeaders() });
   if (!res.ok) throw new Error("Gagal memuat produk");
   return res.json();
 }
 
 export async function getCategories(): Promise<Category[]> {
-  const res = await fetch(`${BASE_URL}/categories`, { headers: authHeaders() });
+  const res = await apiFetch(`${BASE_URL}/categories`, { headers: authHeaders() });
   if (!res.ok) throw new Error("Gagal memuat kategori");
   return res.json();
 }
@@ -105,7 +115,7 @@ async function handle(res: Response) {
 }
 
 export async function createProduct(input: ProductInput) {
-  const res = await fetch(`${BASE_URL}/products`, {
+  const res = await apiFetch(`${BASE_URL}/products`, {
     method: "POST",
     headers: { ...authHeaders(), "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -114,7 +124,7 @@ export async function createProduct(input: ProductInput) {
 }
 
 export async function updateProduct(id: number, input: ProductInput) {
-  const res = await fetch(`${BASE_URL}/products/${id}`, {
+  const res = await apiFetch(`${BASE_URL}/products/${id}`, {
     method: "PUT",
     headers: { ...authHeaders(), "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -123,7 +133,7 @@ export async function updateProduct(id: number, input: ProductInput) {
 }
 
 export async function deleteProduct(id: number) {
-  const res = await fetch(`${BASE_URL}/products/${id}`, {
+  const res = await apiFetch(`${BASE_URL}/products/${id}`, {
     method: "DELETE",
     headers: authHeaders(),
   });
@@ -133,7 +143,7 @@ export async function deleteProduct(id: number) {
 export async function getMovements(productId = ""): Promise<StockMovement[]> {
   const params = new URLSearchParams();
   if (productId) params.set("product_id", productId);
-  const res = await fetch(`${BASE_URL}/stock/movements?${params}`, { headers: authHeaders() });
+  const res = await apiFetch(`${BASE_URL}/stock/movements?${params}`, { headers: authHeaders() });
   return handle(res);
 }
 
@@ -143,7 +153,7 @@ export async function addStock(input: {
   quantity: number;
   note: string;
 }) {
-  const res = await fetch(`${BASE_URL}/stock`, {
+  const res = await apiFetch(`${BASE_URL}/stock`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify(input),
@@ -152,7 +162,7 @@ export async function addStock(input: {
 }
 
 export async function createSale(items: { product_id: number; quantity: number }[]) {
-  const res = await fetch(`${BASE_URL}/sales`, {
+  const res = await apiFetch(`${BASE_URL}/sales`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({ items }),
@@ -161,27 +171,27 @@ export async function createSale(items: { product_id: number; quantity: number }
 }
 
 export async function getSales(): Promise<Sale[]> {
-  const res = await fetch(`${BASE_URL}/sales`, { headers: authHeaders() });
+  const res = await apiFetch(`${BASE_URL}/sales`, { headers: authHeaders() });
   return handle(res);
 }
 
 export async function getSale(id: number): Promise<SaleDetail> {
-  const res = await fetch(`${BASE_URL}/sales/${id}`, { headers: authHeaders() });
+  const res = await apiFetch(`${BASE_URL}/sales/${id}`, { headers: authHeaders() });
   return handle(res);
 }
 
 export async function getDashboard(): Promise<DashboardData> {
-  const res = await fetch(`${BASE_URL}/reports/dashboard`, { headers: authHeaders() });
+  const res = await apiFetch(`${BASE_URL}/reports/dashboard`, { headers: authHeaders() });
   return handle(res);
 }
 
 export async function getSalesReport(from: string, to: string): Promise<SalesReport> {
-  const res = await fetch(`${BASE_URL}/reports/sales?from=${from}&to=${to}`, { headers: authHeaders() });
+  const res = await apiFetch(`${BASE_URL}/reports/sales?from=${from}&to=${to}`, { headers: authHeaders() });
   return handle(res);
 }
 
 export async function downloadSalesCsv(from: string, to: string) {
-  const res = await fetch(`${BASE_URL}/reports/sales/export?from=${from}&to=${to}`, { headers: authHeaders() });
+  const res = await apiFetch(`${BASE_URL}/reports/sales/export?from=${from}&to=${to}`, { headers: authHeaders() });
   if (!res.ok) throw new Error("Gagal mengunduh CSV");
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
@@ -193,7 +203,7 @@ export async function downloadSalesCsv(from: string, to: string) {
 }
 
 export async function createCategory(name: string) {
-  const res = await fetch(`${BASE_URL}/categories`, {
+  const res = await apiFetch(`${BASE_URL}/categories`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({ name }),
@@ -202,7 +212,7 @@ export async function createCategory(name: string) {
 }
 
 export async function updateCategory(id: number, name: string) {
-  const res = await fetch(`${BASE_URL}/categories/${id}`, {
+  const res = await apiFetch(`${BASE_URL}/categories/${id}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({ name }),
@@ -211,7 +221,7 @@ export async function updateCategory(id: number, name: string) {
 }
 
 export async function deleteCategory(id: number) {
-  const res = await fetch(`${BASE_URL}/categories/${id}`, {
+  const res = await apiFetch(`${BASE_URL}/categories/${id}`, {
     method: "DELETE",
     headers: authHeaders(),
   });

@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import type { Category, Product } from "../../types";
 import type { ProductInput } from "../services/api";
 
 interface Props {
   categories: Category[];
-  product: Product | null; // null = mode tambah
+  product: Product | null;
   onSubmit: (data: ProductInput) => Promise<void>;
   onCancel: () => void;
 }
@@ -20,11 +20,18 @@ export default function ProductForm({ categories, product, onSubmit, onCancel }:
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
     setError("");
+    const cost = Number(costPrice);
+    const selling = Number(sellingPrice);
+    const initialStock = Number(stock);
+    const minimum = Number(minimumStock);
     if (!sku.trim() || !name.trim()) return setError("SKU dan nama wajib diisi");
-    if (Number(sellingPrice) < 0 || sellingPrice === "") return setError("Harga jual tidak valid");
-    if (Number(costPrice) < 0) return setError("Harga modal tidak valid");
+    if (!Number.isFinite(selling) || selling < 0 || sellingPrice === "") return setError("Harga jual tidak valid");
+    if (!Number.isFinite(cost) || cost < 0) return setError("Harga modal tidak valid");
+    if (!Number.isInteger(minimum) || minimum < 0) return setError("Stok minimum harus bilangan bulat positif atau nol");
+    if (!product && (!Number.isInteger(initialStock) || initialStock < 0)) return setError("Stok awal harus bilangan bulat positif atau nol");
 
     setSaving(true);
     try {
@@ -32,58 +39,58 @@ export default function ProductForm({ categories, product, onSubmit, onCancel }:
         category_id: categoryId ? Number(categoryId) : null,
         sku: sku.trim(),
         name: name.trim(),
-        cost_price: Number(costPrice),
-        selling_price: Number(sellingPrice),
-        stock: product ? undefined : Number(stock),
-        minimum_stock: Number(minimumStock),
+        cost_price: cost,
+        selling_price: selling,
+        stock: product ? undefined : initialStock,
+        minimum_stock: minimum,
       });
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Gagal menyimpan produk");
     } finally {
       setSaving(false);
     }
   };
 
-  const field = { display: "flex", flexDirection: "column" as const, gap: 4 };
-
   return (
-    <div style={{ border: "1px solid #999", padding: 16, marginBottom: 16, maxWidth: 420 }}>
-      <h2>{product ? "Edit Produk" : "Tambah Produk"}</h2>
-      <div style={{ display: "grid", gap: 10 }}>
-        <label style={field}>SKU
-          <input value={sku} onChange={(e) => setSku(e.target.value)} />
+    <form className="form-card product-form" onSubmit={handleSubmit}>
+      <div className="section-heading form-heading">
+        <div>
+          <h3>{product ? "Edit produk" : "Tambah produk baru"}</h3>
+          <p>Lengkapi informasi katalog di bawah ini.</p>
+        </div>
+        <button className="icon-button" type="button" onClick={onCancel} aria-label="Tutup form">×</button>
+      </div>
+      <div className="form-grid">
+        <label className="form-field">SKU
+          <input value={sku} onChange={(event) => setSku(event.target.value)} required autoComplete="off" />
         </label>
-        <label style={field}>Nama
-          <input value={name} onChange={(e) => setName(e.target.value)} />
+        <label className="form-field">Nama produk
+          <input value={name} onChange={(event) => setName(event.target.value)} required />
         </label>
-        <label style={field}>Kategori
-          <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+        <label className="form-field">Kategori
+          <select value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>
             <option value="">Tanpa kategori</option>
-            {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
           </select>
         </label>
-        <label style={field}>Harga modal
-          <input type="number" value={costPrice} onChange={(e) => setCostPrice(e.target.value)} />
+        <label className="form-field">Harga modal (Rp)
+          <input type="number" min="0" step="any" value={costPrice} onChange={(event) => setCostPrice(event.target.value)} required />
         </label>
-        <label style={field}>Harga jual
-          <input type="number" value={sellingPrice} onChange={(e) => setSellingPrice(e.target.value)} />
+        <label className="form-field">Harga jual (Rp)
+          <input type="number" min="0" step="any" value={sellingPrice} onChange={(event) => setSellingPrice(event.target.value)} required />
         </label>
-        {!product && (
-          <label style={field}>Stok awal
-            <input type="number" value={stock} onChange={(e) => setStock(e.target.value)} />
-          </label>
-        )}
-        <label style={field}>Stok minimum
-          <input type="number" value={minimumStock} onChange={(e) => setMinimumStock(e.target.value)} />
+        {!product && <label className="form-field">Stok awal
+          <input type="number" min="0" step="1" value={stock} onChange={(event) => setStock(event.target.value)} required />
+        </label>}
+        <label className="form-field">Batas stok minimum
+          <input type="number" min="0" step="1" value={minimumStock} onChange={(event) => setMinimumStock(event.target.value)} required />
         </label>
       </div>
-
-      {error && <p style={{ color: "red" }}>{error}</p>}
-
-      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-        <button onClick={handleSubmit} disabled={saving}>{saving ? "Menyimpan..." : "Simpan"}</button>
-        <button onClick={onCancel} disabled={saving}>Batal</button>
+      {error && <div className="alert alert-error" role="alert">{error}</div>}
+      <div className="form-actions">
+        <button className="button button-primary" type="submit" disabled={saving}>{saving ? "Menyimpan..." : "Simpan produk"}</button>
+        <button className="button button-secondary" type="button" onClick={onCancel} disabled={saving}>Batal</button>
       </div>
-    </div>
+    </form>
   );
 }

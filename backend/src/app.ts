@@ -12,8 +12,9 @@ import reportRoutes from "./routes/reports";
 dotenv.config();
 const app = express();
 
-if (!process.env.JWT_SECRET) {
-  throw new Error("JWT_SECRET wajib diisi");
+const jwtSecret = process.env.JWT_SECRET;
+if (!jwtSecret || jwtSecret.length < 32) {
+  throw new Error("JWT_SECRET wajib diisi dengan secret acak minimal 32 karakter (jangan gunakan nilai contoh)");
 }
 
 app.use(cors({ origin: process.env.CORS_ORIGIN?.split(",") ?? true }));

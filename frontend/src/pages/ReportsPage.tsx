@@ -1,5 +1,7 @@
-import { useEffect, useState } from "react";
-import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from "recharts";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
+import {
+  LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer,
+} from "recharts";
 import { getSalesReport, downloadSalesCsv } from "../services/api";
 import type { SalesReport } from "../services/api";
 
@@ -7,91 +9,161 @@ const rupiah = (v: number | string) =>
   new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(Number(v));
 
 const pad = (n: number) => String(n).padStart(2, "0");
-const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const fmt = (date: Date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+
+function getInitialRange() {
+  const to = new Date();
+  const from = new Date(to);
+  from.setDate(from.getDate() - 29);
+  return { from: fmt(from), to: fmt(to) };
+}
+
+const compactRupiah = (value: number) => value >= 1_000_000
+  ? `Rp${(value / 1_000_000).toLocaleString("id-ID", { maximumFractionDigits: 1 })}jt`
+  : value >= 1_000
+    ? `Rp${(value / 1_000).toLocaleString("id-ID", { maximumFractionDigits: 0 })}rb`
+    : `Rp${value}`;
 
 export default function ReportsPage() {
-  const today = new Date();
-  const monthAgo = new Date();
-  monthAgo.setDate(monthAgo.getDate() - 29);
-
-  const [from, setFrom] = useState(fmt(monthAgo));
-  const [to, setTo] = useState(fmt(today));
+  const [initialRange] = useState(getInitialRange);
+  const [from, setFrom] = useState(initialRange.from);
+  const [to, setTo] = useState(initialRange.to);
   const [report, setReport] = useState<SalesReport | null>(null);
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
 
-  const load = () => {
-    if (from > to) return setError("Tanggal awal tidak boleh setelah tanggal akhir");
+  const loadReport = useCallback((start: string, end: string) => {
+    if (start > end) {
+      setError("Tanggal awal tidak boleh setelah tanggal akhir");
+      setReport(null);
+      setLoading(false);
+      return;
+    }
     setError("");
     setLoading(true);
-    getSalesReport(from, to)
+    setReport(null);
+    getSalesReport(start, end)
       .then(setReport)
-      .catch((e) => setError(e.message))
+      .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    getSalesReport(initialRange.from, initialRange.to)
+      .then((result) => { if (active) setReport(result); })
+      .catch((e: Error) => { if (active) setError(e.message); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [initialRange]);
+
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    loadReport(from, to);
   };
 
-  useEffect(load, []); // muat sekali saat halaman dibuka
+  const setPreset = (days: 7 | 30 | "month") => {
+    const end = new Date();
+    const start = new Date(end);
+    if (days === "month") start.setDate(1);
+    else start.setDate(start.getDate() - days + 1);
+    const range = { from: fmt(start), to: fmt(end) };
+    setFrom(range.from);
+    setTo(range.to);
+    loadReport(range.from, range.to);
+  };
 
   const exportCsv = async () => {
+    setError("");
+    setExporting(true);
     try {
       await downloadSalesCsv(from, to);
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Gagal mengunduh CSV");
+    } finally {
+      setExporting(false);
     }
   };
 
-  const card = { border: "1px solid #999", padding: 16, minWidth: 180 };
+  const currentReport = report?.from === from && report.to === to ? report : null;
 
   return (
-    <div style={{ padding: 24, textAlign: "left" }}>
-      <h1>Laporan Penjualan</h1>
-
-      <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16, flexWrap: "wrap" }}>
-        <label>Dari <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></label>
-        <label>Sampai <input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></label>
-        <button onClick={load} disabled={loading}>{loading ? "Memuat..." : "Tampilkan"}</button>
-        <button onClick={exportCsv}>Ekspor CSV</button>
+    <section className="page-section">
+      <div className="section-heading">
+        <div><h2>Laporan penjualan</h2><p>Analisis pendapatan, laba kotor, dan produk terlaris.</p></div>
       </div>
 
-      {error && <p style={{ color: "red" }}>{error}</p>}
+      <form className="report-toolbar" onSubmit={submit}>
+        <label className="date-field">Dari<input type="date" value={from} onChange={(event) => setFrom(event.target.value)} required /></label>
+        <label className="date-field">Sampai<input type="date" value={to} onChange={(event) => setTo(event.target.value)} required /></label>
+        <button className="button button-primary" type="submit" disabled={loading}>{loading ? "Memuat..." : "Tampilkan laporan"}</button>
+        <div className="preset-actions" aria-label="Rentang cepat">
+          <button className="button button-secondary" type="button" onClick={() => setPreset(7)}>7 hari</button>
+          <button className="button button-secondary" type="button" onClick={() => setPreset(30)}>30 hari</button>
+          <button className="button button-secondary" type="button" onClick={() => setPreset("month")}>Bulan ini</button>
+        </div>
+        <button className="button button-secondary" type="button" onClick={exportCsv} disabled={exporting || loading || !currentReport}>
+          {exporting ? "Mengunduh..." : "Ekspor CSV"}
+        </button>
+      </form>
 
-      {report && (
+      {error && <div className="alert alert-error" role="alert">{error}</div>}
+      {loading && <div className="table-card table-message" role="status">Memuat laporan penjualan...</div>}
+      {!loading && !error && !currentReport && <div className="empty-state">Pilih rentang tanggal, lalu tampilkan laporan.</div>}
+
+      {currentReport && !loading && (
         <>
-          <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 24 }}>
-            <div style={card}><div>Pendapatan</div><h2>{rupiah(report.revenue)}</h2></div>
-            <div style={card}><div>Laba kotor</div><h2>{rupiah(report.profit)}</h2></div>
-            <div style={card}><div>Transaksi</div><h2>{report.transactions}</h2></div>
-            <div style={card}><div>Barang terjual</div><h2>{report.items_sold}</h2></div>
+          <div className="metrics-grid report-metrics">
+            <article className="report-metric"><span>Pendapatan</span><strong>{rupiah(currentReport.revenue)}</strong><small>Selama periode terpilih</small></article>
+            <article className="report-metric"><span>Laba kotor</span><strong>{rupiah(currentReport.profit)}</strong><small>Pendapatan dikurangi modal</small></article>
+            <article className="report-metric"><span>Transaksi</span><strong>{currentReport.transactions.toLocaleString("id-ID")}</strong><small>Transaksi berhasil</small></article>
+            <article className="report-metric"><span>Barang terjual</span><strong>{currentReport.items_sold.toLocaleString("id-ID")}</strong><small>Total unit terjual</small></article>
           </div>
 
-          <h2>Tren penjualan harian</h2>
-          <div style={{ width: "100%", height: 280 }}>
-            <ResponsiveContainer>
-              <LineChart data={report.daily}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" tickFormatter={(d) => d.slice(5)} />
-                <YAxis tickFormatter={(v) => `${v / 1000}rb`} />
-                <Tooltip formatter={(v) => rupiah(Number(v))} />
-                <Line type="monotone" dataKey="total" name="Penjualan" stroke="#4f7cff" />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+          <article className="dashboard-panel report-chart-panel">
+            <div className="panel-heading">
+              <div><h3>Tren penjualan harian</h3><p>{new Date(`${currentReport.from}T00:00:00`).toLocaleDateString("id-ID")} – {new Date(`${currentReport.to}T00:00:00`).toLocaleDateString("id-ID")}</p></div>
+            </div>
+            {currentReport.daily.length === 0 ? <div className="empty-state">Tidak ada penjualan pada periode ini.</div> : (
+              <div className="chart-wrap report-chart" role="img" aria-label="Grafik tren penjualan harian">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={currentReport.daily} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                    <CartesianGrid stroke="#edf1f6" strokeDasharray="4 4" vertical={false} />
+                    <XAxis dataKey="date" tickFormatter={(date: string) => date.slice(5)} tick={{ fill: "#8490a2", fontSize: 10 }} axisLine={false} tickLine={false} />
+                    <YAxis tickFormatter={compactRupiah} tick={{ fill: "#8490a2", fontSize: 10 }} axisLine={false} tickLine={false} width={60} />
+                    <Tooltip formatter={(value) => [rupiah(Number(value)), "Penjualan"]} labelFormatter={(label) => String(label)} contentStyle={{ border: "1px solid #e6ebf1", borderRadius: 9, fontSize: 12 }} />
+                    <Line type="monotone" dataKey="total" name="Penjualan" stroke="#4f7cff" strokeWidth={2.5} dot={{ fill: "#4f7cff", r: 3 }} activeDot={{ r: 5 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </article>
 
-          <h2>Produk terlaris</h2>
-          <table border={1} cellPadding={8} style={{ borderCollapse: "collapse", width: "100%", maxWidth: 700 }}>
-            <thead><tr><th>#</th><th>SKU</th><th>Produk</th><th>Terjual</th><th>Pendapatan</th></tr></thead>
-            <tbody>
-              {report.top_products.length === 0 && <tr><td colSpan={5}>Belum ada penjualan pada periode ini</td></tr>}
-              {report.top_products.map((p, i) => (
-                <tr key={p.sku}>
-                  <td>{i + 1}</td><td>{p.sku}</td><td>{p.name}</td>
-                  <td>{p.quantity}</td><td>{rupiah(p.revenue)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="section-heading report-products-heading">
+            <div><h3>Produk terlaris</h3><p>Produk dengan jumlah unit terjual tertinggi.</p></div>
+          </div>
+          <div className="table-card">
+            <div className="table-scroll">
+              <table className="data-table">
+                <thead><tr><th>#</th><th>SKU</th><th>Produk</th><th>Terjual</th><th>Pendapatan</th></tr></thead>
+                <tbody>
+                  {currentReport.top_products.length === 0 && <tr><td className="table-empty" colSpan={5}>Belum ada penjualan pada periode ini.</td></tr>}
+                  {currentReport.top_products.map((product, index) => (
+                    <tr key={product.sku}>
+                      <td><span className="rank-badge">{index + 1}</span></td>
+                      <td className="cell-muted">{product.sku}</td>
+                      <td className="cell-strong">{product.name}</td>
+                      <td>{product.quantity.toLocaleString("id-ID")}</td>
+                      <td>{rupiah(product.revenue)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </>
       )}
-    </div>
+    </section>
   );
 }
