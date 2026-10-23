@@ -1,20 +1,24 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { getProducts, getMovements, addStock } from "../services/api";
-import type { StockMovement, User } from "../services/api";
+import { getProducts, getMovements, addStock, getWarehouses } from "../services/api";
+import type { StockMovement, User, Warehouse } from "../services/api";
 import type { Product } from "../../types";
 
-type MovementFilter = "all" | "initial" | "in" | "out" | "adjustment";
+type MovementFilter = "all" | "initial" | "in" | "out" | "adjustment" | "transfer";
 
 const labels: Record<StockMovement["movement_type"], string> = {
   initial: "Stok awal",
   in: "Barang masuk",
   out: "Penjualan",
   adjustment: "Penyesuaian",
+  transfer: "Transfer",
 };
 
 export default function StockPage({ user }: { user: User }) {
   const isAdmin = user.role === "admin";
   const [products, setProducts] = useState<Product[]>([]);
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [formWarehouseId, setFormWarehouseId] = useState("");
+  const [movementWarehouseId, setMovementWarehouseId] = useState("");
   const [movements, setMovements] = useState<StockMovement[]>([]);
   const [productId, setProductId] = useState("");
   const [movementFilter, setMovementFilter] = useState<MovementFilter>("all");
@@ -30,7 +34,17 @@ export default function StockPage({ user }: { user: User }) {
 
   useEffect(() => {
     let active = true;
-    Promise.all([getProducts(), getMovements(productId)])
+    getWarehouses().then((items) => {
+      if (!active) return;
+      setWarehouses(items);
+      setFormWarehouseId((current) => current || String(items.find((warehouse) => Boolean(warehouse.is_default))?.id ?? ""));
+    }).catch((e: Error) => { if (active) setError(e.message); });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    Promise.all([getProducts(), getMovements(productId, movementWarehouseId)])
       .then(([productList, history]) => {
         if (!active) return;
         setProducts(productList);
@@ -40,7 +54,7 @@ export default function StockPage({ user }: { user: User }) {
       .catch((e: Error) => { if (active) setError(e.message); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [reloadKey, productId]);
+  }, [reloadKey, productId, movementWarehouseId]);
 
   const filteredMovements = useMemo(() => movements.filter((movement) => {
     const matchesType = movementFilter === "all" || movement.movement_type === movementFilter;
@@ -62,7 +76,13 @@ export default function StockPage({ user }: { user: User }) {
 
     setSaving(true);
     try {
-      await addStock({ product_id: Number(productId), movement_type: type, quantity: qty, note: note.trim() });
+      await addStock({
+        product_id: Number(productId),
+        warehouse_id: formWarehouseId ? Number(formWarehouseId) : undefined,
+        movement_type: type,
+        quantity: qty,
+        note: note.trim(),
+      });
       setQuantity("");
       setNote("");
       setSuccess("Perubahan stok berhasil disimpan.");
@@ -106,6 +126,11 @@ export default function StockPage({ user }: { user: User }) {
                 {products.map((product) => <option key={product.id} value={product.id}>{product.sku} — {product.name} (stok {product.stock})</option>)}
               </select>
             </label>
+            <label className="form-field">Gudang
+              <select value={formWarehouseId} onChange={(event) => setFormWarehouseId(event.target.value)} required>
+                {warehouses.filter((warehouse) => Boolean(warehouse.is_active)).map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>)}
+              </select>
+            </label>
             <label className="form-field">Jenis perubahan
               <select value={type} onChange={(event) => setType(event.target.value as "in" | "adjustment")}>
                 <option value="in">Barang masuk</option>
@@ -145,12 +170,17 @@ export default function StockPage({ user }: { user: User }) {
           <option value="">Semua produk</option>
           {products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
         </select>
+        <select aria-label="Filter gudang" value={movementWarehouseId} onChange={(event) => { setLoading(true); setMovementWarehouseId(event.target.value); }}>
+          <option value="">Semua gudang</option>
+          {warehouses.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>)}
+        </select>
         <select aria-label="Filter jenis pergerakan" value={movementFilter} onChange={(event) => setMovementFilter(event.target.value as MovementFilter)}>
           <option value="all">Semua jenis</option>
           <option value="initial">Stok awal</option>
           <option value="in">Barang masuk</option>
           <option value="out">Penjualan</option>
           <option value="adjustment">Penyesuaian</option>
+          <option value="transfer">Transfer</option>
         </select>
       </div>
       <div className="table-card">
@@ -158,12 +188,13 @@ export default function StockPage({ user }: { user: User }) {
         {loading ? <div className="table-message">Memuat riwayat pergerakan...</div> : (
           <div className="table-scroll">
             <table className="data-table">
-              <thead><tr><th>Waktu</th><th>Produk</th><th>Jenis</th><th>Jumlah</th><th>Oleh</th><th>Catatan</th></tr></thead>
+              <thead><tr><th>Waktu</th><th>Gudang</th><th>Produk</th><th>Jenis</th><th>Jumlah</th><th>Oleh</th><th>Catatan</th></tr></thead>
               <tbody>
-                {filteredMovements.length === 0 && <tr><td className="table-empty" colSpan={6}>Belum ada pergerakan yang cocok dengan filter.</td></tr>}
+                {filteredMovements.length === 0 && <tr><td className="table-empty" colSpan={7}>Belum ada pergerakan yang cocok dengan filter.</td></tr>}
                 {filteredMovements.map((movement) => (
                   <tr key={movement.id}>
                     <td>{new Date(movement.created_at).toLocaleString("id-ID")}</td>
+                    <td>{movement.warehouse_name}</td>
                     <td><span className="cell-strong">{movement.product_name}</span><br /><span className="cell-muted">{movement.sku}</span></td>
                     <td><span className={`status-badge ${movement.quantity < 0 || movement.movement_type === "out" ? "status-warning" : "status-neutral"}`}>{labels[movement.movement_type]}</span></td>
                     <td className={movement.quantity < 0 ? "quantity-negative" : "quantity-positive"}>{movement.quantity > 0 ? `+${movement.quantity}` : movement.quantity}</td>

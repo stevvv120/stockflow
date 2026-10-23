@@ -6,11 +6,13 @@ import SalesPage from "./pages/SalesPage";
 import SalesHistory from "./pages/SalesHistory";
 import ReportsPage from "./pages/ReportsPage";
 import CategoriesPage from "./pages/CategoriesPage";
+import OperationsPage from "./pages/OperationsPage";
 import Login from "./pages/Login";
 import type { User } from "./services/api";
+import { version } from "../package.json";
 import "./App.css";
 
-type Page = "dashboard" | "sales" | "history" | "products" | "stock" | "reports" | "categories";
+type Page = "dashboard" | "sales" | "history" | "products" | "stock" | "reports" | "categories" | "operations";
 
 const navItems: { page: Page; label: string; icon: string; adminOnly?: boolean }[] = [
   { page: "dashboard", label: "Dashboard", icon: "dashboard" },
@@ -19,6 +21,7 @@ const navItems: { page: Page; label: string; icon: string; adminOnly?: boolean }
   { page: "products", label: "Produk", icon: "products" },
   { page: "categories", label: "Kategori", icon: "categories", adminOnly: true },
   { page: "stock", label: "Manajemen stok", icon: "stock" },
+  { page: "operations", label: "Operasional", icon: "stock" },
   { page: "reports", label: "Laporan", icon: "reports", adminOnly: true },
 ];
 
@@ -30,6 +33,7 @@ const pageDetails: Record<Page, { title: string; description: string }> = {
   stock: { title: "Manajemen stok", description: "Pantau dan perbarui pergerakan stok" },
   reports: { title: "Laporan", description: "Analisis performa penjualan" },
   categories: { title: "Kategori", description: "Kelola kategori produk" },
+  operations: { title: "Operasional", description: "Gudang, procurement, pesanan, dan pengiriman" },
 };
 
 const iconPaths: Record<string, string[]> = {
@@ -105,7 +109,7 @@ export default function App() {
       <aside className="sidebar">
         <div className="brand">
           <span className="brand-mark"><Icon name="stock" size={20} /></span>
-          <span className="brand-copy"><strong>StockFlow</strong><span>Inventory &amp; Sales</span></span>
+          <span className="brand-copy"><strong>StockFlow</strong><span>Inventory &amp; Supply Chain</span></span>
         </div>
         <div className="nav-label">Menu utama</div>
         <nav className="main-nav" aria-label="Navigasi utama">
@@ -121,7 +125,10 @@ export default function App() {
             </button>
           ))}
         </nav>
-        <div className="sidebar-footer">Kelola bisnis Anda dengan lebih mudah</div>
+        <div className="sidebar-footer">
+          <span>Kelola bisnis Anda dengan lebih mudah</span>
+          <span className="sidebar-version">StockFlow v{version}</span>
+        </div>
       </aside>
       <div className="workspace">
         <header className="topbar">
@@ -147,6 +154,7 @@ export default function App() {
           {page === "products" && <ProductList user={user} />}
           {page === "categories" && isAdmin && <CategoriesPage />}
           {page === "stock" && <StockPage user={user} />}
+          {page === "operations" && <OperationsPage user={user} />}
           {page === "reports" && isAdmin && <ReportsPage />}
         </main>
       </div>

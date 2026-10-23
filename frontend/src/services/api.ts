@@ -37,7 +37,7 @@ export async function login(email: string, password: string): Promise<{ token: s
   return data;
 }
 
-const BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:5000/api";
+const BASE_URL = import.meta.env.VITE_API_URL?.trim() || "http://localhost:5000/api";
 
 export async function getProducts(search = "", categoryId = ""): Promise<Product[]> {
   const params = new URLSearchParams();
@@ -67,13 +67,14 @@ export interface ProductInput {
 
 export interface StockMovement {
   id: number;
-  movement_type: "initial" | "in" | "out" | "adjustment";
+  movement_type: "initial" | "in" | "out" | "adjustment" | "transfer";
   quantity: number;
   note: string | null;
   created_at: string;
   sku: string;
   product_name: string;
   user_name: string | null;
+  warehouse_name: string;
 }
 
 export interface Sale {
@@ -82,6 +83,7 @@ export interface Sale {
   total_amount: string;
   created_at: string;
   user_name: string;
+  warehouse_name: string;
 }
 
 export interface SaleDetail extends Sale {
@@ -108,10 +110,228 @@ export interface SalesReport {
   top_products: { sku: string; name: string; quantity: number; revenue: number }[];
 }
 
+export interface Warehouse {
+  id: number;
+  code: string;
+  name: string;
+  address: string | null;
+  is_default: number;
+  is_active: number;
+}
+
+export interface Supplier {
+  id: number;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+  is_active: number;
+}
+
+export interface PurchaseOrder {
+  id: number;
+  order_number: string;
+  status: string;
+  notes: string | null;
+  supplier_name: string;
+  warehouse_name: string;
+  created_by_name: string;
+  created_by: number;
+  line_count: number;
+}
+
+export interface PurchaseOrderDetail extends PurchaseOrder {
+  items: {
+    item_id: number;
+    product_id: number;
+    sku: string;
+    product_name: string;
+    quantity: number;
+    received_quantity: number;
+    unit_cost: string;
+  }[];
+}
+
+export interface CustomerOrder {
+  id: number;
+  order_number: string;
+  status: string;
+  notes: string | null;
+  warehouse_name: string;
+  created_by_name: string;
+  created_by: number;
+  shipment_id: number | null;
+  shipment_status: string | null;
+  tracking_number: string | null;
+  invoice_number: string | null;
+}
+
+export interface AuditLog {
+  id: number;
+  action: string;
+  entity_type: string;
+  entity_id: number | null;
+  details: string | Record<string, unknown> | null;
+  created_at: string;
+  user_name: string | null;
+}
+
+export interface ShipmentEvent {
+  id: number;
+  status: string;
+  note: string | null;
+  created_at: string;
+  user_name: string;
+}
+
 async function handle(res: Response) {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.message || "Terjadi kesalahan");
   return data;
+}
+
+async function workflowFetch(path: string, init?: RequestInit) {
+  const res = await apiFetch(`${BASE_URL}/workflows${path}`, {
+    ...init,
+    headers: { ...authHeaders(), ...init?.headers },
+  });
+  return handle(res);
+}
+
+export async function getWarehouses(): Promise<Warehouse[]> {
+  return workflowFetch("/warehouses");
+}
+
+export async function createWarehouse(input: { code: string; name: string; address?: string }) {
+  return workflowFetch("/warehouses", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function getStockLevels(warehouseId?: number) {
+  return workflowFetch(`/stock/levels${warehouseId ? `?warehouse_id=${warehouseId}` : ""}`);
+}
+
+export async function transferStock(input: {
+  from_warehouse_id: number;
+  to_warehouse_id: number;
+  product_id: number;
+  quantity: number;
+  note?: string;
+}) {
+  return workflowFetch("/stock/transfers", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function getSuppliers(): Promise<Supplier[]> {
+  return workflowFetch("/suppliers");
+}
+
+export async function createSupplier(input: { name: string; email?: string; phone?: string; address?: string }) {
+  return workflowFetch("/suppliers", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function getPurchaseOrders(): Promise<PurchaseOrder[]> {
+  return workflowFetch("/purchase-orders");
+}
+
+export async function getPurchaseOrder(id: number): Promise<PurchaseOrderDetail> {
+  return workflowFetch(`/purchase-orders/${id}`);
+}
+
+export async function createPurchaseOrder(input: {
+  supplier_id: number;
+  warehouse_id?: number;
+  notes?: string;
+  items: { product_id: number; quantity: number }[];
+}) {
+  return workflowFetch("/purchase-orders", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function submitPurchaseOrder(id: number) {
+  return workflowFetch(`/purchase-orders/${id}/submit`, { method: "POST" });
+}
+
+export async function cancelPurchaseOrder(id: number) {
+  return workflowFetch(`/purchase-orders/${id}/cancel`, { method: "POST" });
+}
+
+export async function reviewPurchaseOrder(id: number, action: "approve" | "reject") {
+  return workflowFetch(`/purchase-orders/${id}/review`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action }),
+  });
+}
+
+export async function receivePurchaseOrder(id: number, items: { item_id: number; quantity: number }[]) {
+  return workflowFetch(`/purchase-orders/${id}/receive`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ items }),
+  });
+}
+
+export async function getCustomerOrders(): Promise<CustomerOrder[]> {
+  return workflowFetch("/orders");
+}
+
+export async function createCustomerOrder(input: {
+  warehouse_id?: number;
+  notes?: string;
+  items: { product_id: number; quantity: number }[];
+}) {
+  return workflowFetch("/orders", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function reviewCustomerOrder(id: number, action: "approve" | "reject") {
+  return workflowFetch(`/orders/${id}/review`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action }),
+  });
+}
+
+export async function cancelCustomerOrder(id: number) {
+  return workflowFetch(`/orders/${id}/cancel`, { method: "POST" });
+}
+
+export async function updateShipmentStatus(
+  id: number,
+  status: "shipped" | "in_transit" | "delivered" | "cancelled",
+  tracking_number?: string,
+  note?: string,
+) {
+  return workflowFetch(`/shipments/${id}/status`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status, tracking_number, note }),
+  });
+}
+
+export async function getShipmentEvents(id: number): Promise<ShipmentEvent[]> {
+  return workflowFetch(`/shipments/${id}/events`);
+}
+
+export async function getAuditLogs(): Promise<AuditLog[]> {
+  return workflowFetch("/audit-logs");
 }
 
 export async function createProduct(input: ProductInput) {
@@ -140,15 +360,17 @@ export async function deleteProduct(id: number) {
   return handle(res);
 }
 
-export async function getMovements(productId = ""): Promise<StockMovement[]> {
+export async function getMovements(productId = "", warehouseId = ""): Promise<StockMovement[]> {
   const params = new URLSearchParams();
   if (productId) params.set("product_id", productId);
+  if (warehouseId) params.set("warehouse_id", warehouseId);
   const res = await apiFetch(`${BASE_URL}/stock/movements?${params}`, { headers: authHeaders() });
   return handle(res);
 }
 
 export async function addStock(input: {
   product_id: number;
+  warehouse_id?: number;
   movement_type: "in" | "adjustment";
   quantity: number;
   note: string;
@@ -161,11 +383,11 @@ export async function addStock(input: {
   return handle(res);
 }
 
-export async function createSale(items: { product_id: number; quantity: number }[]) {
+export async function createSale(items: { product_id: number; quantity: number }[], warehouseId?: number) {
   const res = await apiFetch(`${BASE_URL}/sales`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders() },
-    body: JSON.stringify({ items }),
+    body: JSON.stringify({ items, warehouse_id: warehouseId }),
   });
   return handle(res) as Promise<{ id: number; invoice_number: string; total_amount: number }>;
 }

@@ -73,7 +73,7 @@ export default function SalesHistory() {
             <div>
               <span className="eyebrow">Detail transaksi</span>
               <h3>{detail.invoice_number}</h3>
-              <p>{new Date(detail.created_at).toLocaleString("id-ID")} · Kasir: {detail.user_name}</p>
+              <p>{new Date(detail.created_at).toLocaleString("id-ID")} · Gudang: {detail.warehouse_name} · Kasir: {detail.user_name}</p>
             </div>
             <div className="row-actions no-print">
               <button className="button button-primary" onClick={() => window.print()}>Cetak struk</button>
@@ -114,13 +114,14 @@ export default function SalesHistory() {
         {loading ? <div className="table-message">Memuat riwayat penjualan...</div> : (
           <div className="table-scroll">
             <table className="data-table">
-              <thead><tr><th>Invoice</th><th>Tanggal &amp; waktu</th><th>Kasir</th><th>Total</th><th>Aksi</th></tr></thead>
+              <thead><tr><th>Invoice</th><th>Tanggal &amp; waktu</th><th>Gudang</th><th>Kasir</th><th>Total</th><th>Aksi</th></tr></thead>
               <tbody>
-                {filteredSales.length === 0 && <tr><td colSpan={5} className="table-empty">Transaksi tidak ditemukan pada filter ini.</td></tr>}
+                {filteredSales.length === 0 && <tr><td colSpan={6} className="table-empty">Transaksi tidak ditemukan pada filter ini.</td></tr>}
                 {filteredSales.map((sale) => (
                   <tr key={sale.id}>
                     <td className="cell-strong">{sale.invoice_number}</td>
                     <td>{new Date(sale.created_at).toLocaleString("id-ID")}</td>
+                    <td>{sale.warehouse_name}</td>
                     <td>{sale.user_name}</td>
                     <td>{rupiah(sale.total_amount)}</td>
                     <td><button className="button button-subtle" onClick={() => open(sale.id)} disabled={detailLoading}>

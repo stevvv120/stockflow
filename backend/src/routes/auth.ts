@@ -24,7 +24,7 @@ router.post("/login", loginLimiter, async (req, res) => {
     const user = rows[0];
 
     // Pesan sengaja sama agar tidak membocorkan email mana yang terdaftar
-    if (!user || !(await bcrypt.compare(password, user.password_hash))) {
+    if (!user || !(await bcrypt.compare(password, user.password))) {
       return res.status(401).json({ message: "Email atau password salah" });
     }
 

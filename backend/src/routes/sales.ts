@@ -8,7 +8,11 @@ const router = Router();
 // POST /api/sales : admin dan staff boleh
 router.post("/", authenticate, async (req, res) => {
   try {
-    const result = await createSale((req as any).user.id, req.body.items);
+    const warehouseId = req.body.warehouse_id == null ? undefined : Number(req.body.warehouse_id);
+    if (warehouseId !== undefined && (!Number.isInteger(warehouseId) || warehouseId <= 0)) {
+      return res.status(400).json({ message: "warehouse_id tidak valid" });
+    }
+    const result = await createSale((req as any).user.id, req.body.items, warehouseId);
     res.status(201).json(result);
   } catch (err) {
     if (err instanceof SaleError) {
@@ -22,8 +26,9 @@ router.post("/", authenticate, async (req, res) => {
 router.get("/", authenticate, async (_req, res) => {
   try {
     const [rows] = await pool.query(
-      `SELECT s.id, s.invoice_number, s.total_amount, s.created_at, u.name AS user_name
+      `SELECT s.id, s.invoice_number, s.total_amount, s.created_at, u.name AS user_name, w.name AS warehouse_name
        FROM sales s JOIN users u ON u.id = s.user_id
+       JOIN warehouses w ON w.id = s.warehouse_id
        ORDER BY s.id DESC LIMIT 200`
     );
     res.json(rows);
@@ -37,8 +42,9 @@ router.get("/:id", authenticate, async (req, res) => {
   try {
     const id = Number(req.params.id);
     const [sales]: any = await pool.query(
-      `SELECT s.id, s.invoice_number, s.total_amount, s.created_at, u.name AS user_name
-       FROM sales s JOIN users u ON u.id = s.user_id WHERE s.id = ?`,
+      `SELECT s.id, s.invoice_number, s.total_amount, s.created_at, u.name AS user_name, w.name AS warehouse_name
+       FROM sales s JOIN users u ON u.id = s.user_id
+       JOIN warehouses w ON w.id = s.warehouse_id WHERE s.id = ?`,
       [id]
     );
     if (sales.length === 0) return res.status(404).json({ message: "Transaksi tidak ditemukan" });

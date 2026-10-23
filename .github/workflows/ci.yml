@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Lint frontend
+        working-directory: frontend
+        run: npm run lint
+      - name: Build frontend
+        working-directory: frontend
+        env:
+          VITE_API_URL: https://api.example.invalid/api
+        run: npm run build
+
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: root
+      DB_NAME: stockflow_test
+      JWT_SECRET: ci-only-secret-that-is-at-least-32-characters
+      CORS_ORIGIN: http://localhost:5173
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci
+      - name: Create test database schema
+        run: |
+          mysql -h 127.0.0.1 -uroot -proot -e "CREATE DATABASE stockflow_test;"
+          sed -e '/CREATE DATABASE IF NOT EXISTS stockflow;/d' -e 's/USE stockflow;/USE stockflow_test;/' database/schema.sql | mysql -h 127.0.0.1 -uroot -proot
+      - name: Build backend
+        working-directory: backend
+        run: npm run build
+      - name: Test backend workflows
+        working-directory: backend
+        run: npm test

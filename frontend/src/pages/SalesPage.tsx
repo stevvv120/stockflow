@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { getProducts, createSale } from "../services/api";
+import { getProducts, createSale, getStockLevels, getWarehouses } from "../services/api";
+import type { Warehouse } from "../services/api";
 import type { Product } from "../../types";
 
 interface CartLine { product: Product; quantity: number }
@@ -9,6 +10,9 @@ const rupiah = (v: number | string) =>
 
 export default function SalesPage() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [warehouseId, setWarehouseId] = useState("");
+  const [stockByProduct, setStockByProduct] = useState<Map<number, number>>(new Map());
   const [search, setSearch] = useState("");
   const [availableOnly, setAvailableOnly] = useState(true);
   const [cart, setCart] = useState<CartLine[]>([]);
@@ -20,24 +24,45 @@ export default function SalesPage() {
 
   useEffect(() => {
     let active = true;
-    getProducts(search)
-      .then((result) => { if (active) { setProducts(result); setError(""); } })
+    getWarehouses()
+      .then((items) => {
+        if (!active) return;
+        setWarehouses(items);
+        setWarehouseId((current) => current || String(items.find((item) => Boolean(item.is_default))?.id ?? ""));
+      })
+      .catch((e: Error) => { if (active) { setError(e.message); setLoading(false); } });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!warehouseId) return;
+    let active = true;
+    Promise.all([getProducts(search), getStockLevels(Number(warehouseId))])
+      .then(([result, levels]) => {
+        if (active) {
+          setProducts(result);
+          setStockByProduct(new Map(levels.map((level: { product_id: number; available: number }) => [level.product_id, level.available])));
+          setError("");
+        }
+      })
       .catch((e: Error) => { if (active) setError(e.message); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [search, reloadKey]);
+  }, [search, reloadKey, warehouseId]);
 
+  const stockAvailable = (productId: number) => stockByProduct.get(productId) ?? 0;
   const visibleProducts = useMemo(
-    () => availableOnly ? products.filter((product) => product.stock > 0) : products,
-    [products, availableOnly],
+    () => availableOnly ? products.filter((product) => (stockByProduct.get(product.id) ?? 0) > 0) : products,
+    [products, availableOnly, stockByProduct],
   );
 
   const addToCart = (product: Product) => {
     setError("");
     setSuccess("");
     const found = cart.find((line) => line.product.id === product.id);
-    if (found && found.quantity >= product.stock) {
-      setError(`Stok ${product.name} hanya ${product.stock} item`);
+    const available = stockAvailable(product.id);
+    if (found && found.quantity >= available) {
+      setError(`Stok ${product.name} di gudang ini hanya ${available} item`);
       return;
     }
     if (found) {
@@ -49,7 +74,7 @@ export default function SalesPage() {
 
   const setQuantity = (id: number, quantity: number) => {
     setCart((previous) => previous.map((line) => line.product.id === id
-      ? { ...line, quantity: Math.max(1, Math.min(quantity || 1, line.product.stock)) }
+      ? { ...line, quantity: Math.max(1, Math.min(quantity || 1, stockAvailable(id))) }
       : line));
   };
 
@@ -66,7 +91,10 @@ export default function SalesPage() {
 
     setSaving(true);
     try {
-      const result = await createSale(cart.map((line) => ({ product_id: line.product.id, quantity: line.quantity })));
+      const result = await createSale(
+        cart.map((line) => ({ product_id: line.product.id, quantity: line.quantity })),
+        Number(warehouseId),
+      );
       setSuccess(`Transaksi berhasil disimpan · Invoice ${result.invoice_number} · ${rupiah(result.total_amount)}`);
       setCart([]);
       reloadProducts();
@@ -92,6 +120,11 @@ export default function SalesPage() {
       <div className="sales-layout">
         <section className="table-card sales-products">
           <div className="card-toolbar">
+            <select aria-label="Gudang penjualan" value={warehouseId} onChange={(event) => { setCart([]); setLoading(true); setWarehouseId(event.target.value); }}>
+              {warehouses.filter((warehouse) => Boolean(warehouse.is_active)).map((warehouse) => (
+                <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>
+              ))}
+            </select>
             <label className="search-field">
               <span aria-hidden="true">⌕</span>
               <input
@@ -118,14 +151,15 @@ export default function SalesPage() {
                 )}
                 {!loading && visibleProducts.map((product) => {
                   const inCart = cart.find((line) => line.product.id === product.id)?.quantity ?? 0;
+                  const available = stockAvailable(product.id);
                   return (
                     <tr key={product.id}>
                       <td className="cell-muted">{product.sku}</td>
                       <td className="cell-strong">{product.name}</td>
                       <td>{rupiah(product.selling_price)}</td>
-                      <td>{product.stock}</td>
+                      <td>{available}</td>
                       <td>
-                        <button className="button button-subtle" disabled={product.stock === 0 || inCart >= product.stock} onClick={() => addToCart(product)}>
+                        <button className="button button-subtle" disabled={available === 0 || inCart >= available} onClick={() => addToCart(product)}>
                           {inCart > 0 ? `Tambah (${inCart})` : "Tambah"}
                         </button>
                       </td>
@@ -159,11 +193,11 @@ export default function SalesPage() {
                         aria-label={`Jumlah ${line.product.name}`}
                         type="number"
                         min={1}
-                        max={line.product.stock}
+                        max={stockAvailable(line.product.id)}
                         value={line.quantity}
                         onChange={(event) => setQuantity(line.product.id, Number(event.target.value))}
                       />
-                      <button aria-label={`Tambah jumlah ${line.product.name}`} onClick={() => setQuantity(line.product.id, line.quantity + 1)} disabled={line.quantity >= line.product.stock}>+</button>
+                      <button aria-label={`Tambah jumlah ${line.product.name}`} onClick={() => setQuantity(line.product.id, line.quantity + 1)} disabled={line.quantity >= stockAvailable(line.product.id)}>+</button>
                     </div>
                     <span>{rupiah(Number(line.product.selling_price) * line.quantity)}</span>
                   </div>
